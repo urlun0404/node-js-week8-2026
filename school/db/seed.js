@@ -3,24 +3,22 @@
  * 規則：可重複執行（先清空、再種入資料），即使執行多次也不會有資料疊加的狀況。
  * 執行順序：一定要先 npm run migration:run（沒有資料表，就無法種資料）
  */
-const { dataSource } = require('./data-source')
+const { dataSource } = require("./data-source");
 
 /** 清空：被 FK 指著的表最後刪（GRADE 先刪，CLASS / SUBJECT 最後刪）。
  *  不用 clear()（TRUNCATE 會被 FK 擋）、不用 delete({})（TypeORM 拒絕空條件）。 */
 async function clearAll() {
-  const ORDER = [
-    // TODO: 按「你的」FK 依賴順序填 entity name（先刪 Grade，再 Student，最後 Class / Subject）
-  ]
+  const ORDER = ["Grade", "Student", "Subject", "Class"];
   for (const name of ORDER) {
     if (dataSource.hasMetadata(name)) {
-      await dataSource.createQueryBuilder().delete().from(name).execute()
+      await dataSource.createQueryBuilder().delete().from(name).execute();
     }
   }
 }
 
 async function main() {
-  await dataSource.initialize()
-  await clearAll()
+  await dataSource.initialize();
+  await clearAll();
 
   // ================================================================================
   // TODO：依照任務內容的規格種資料（至少 2 班、2 科目、幾位學生、幾筆成績）
@@ -31,9 +29,41 @@ async function main() {
   //      studentRepo.save({ name: '...', class: 班級物件 })
   //      gradeRepo.save({ score: 95, student: 學生物件, subject: 科目物件 })
   // ================================================================================
+  const classRepo = dataSource.getRepository("Class");
+  const gradeRepo = dataSource.getRepository("Grade");
+  const studentRepo = dataSource.getRepository("Student");
+  const subjectRepo = dataSource.getRepository("Subject");
 
-  console.log('🌱 seed 完成')
-  await dataSource.destroy()
+  const [classA, classB] = await classRepo.save([
+    { name: "Class A" },
+    { name: "Class B" },
+  ]);
+
+  const [math, english] = await subjectRepo.save([
+    { name: "數學" },
+    { name: "英文" },
+  ]);
+
+  const [student1, student2, student3] = await studentRepo.save([
+    { name: "小明", class: classA },
+    { name: "小華", class: classA },
+    { name: "小美", class: classB },
+  ]);
+
+  const gradeResults = await gradeRepo.save([
+    { score: 90, student: student1, subject: math },
+    { score: 85, student: student1, subject: english },
+    { score: 78, student: student2, subject: math },
+    { score: 92, student: student2, subject: english },
+    { score: 88, student: student3, subject: math },
+    { score: 95, student: student3, subject: english },
+  ]);
+
+  console.log("🌱 seed 完成");
+  await dataSource.destroy();
 }
 
-main().catch((e) => { console.error('seed 失敗：', e.message); process.exit(1) })
+main().catch((e) => {
+  console.error("seed 失敗：", e.message);
+  process.exit(1);
+});
